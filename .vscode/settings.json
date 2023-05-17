@@ -1,0 +1,94 @@
+{
+    "editor.rulers": [
+        120
+    ],
+    "python.envFile": "${workspaceFolder}/.venv",
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+    "python.formatting.provider": "black",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": true
+    },
+    "python.analysis.typeCheckingMode": "strict",
+    "python.linting.enabled": true,
+    "python.linting.pylintEnabled": true,
+    "python.linting.mypyEnabled": true,
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportPrivateUsage": "none",
+        "reportMissingTypeStubs": "information",
+        "reportUnknownVariableType": "none",
+        "reportUntypedBaseClass": "none",
+        "reportUnknownMemberType": "none",
+        "reportUnknownArgumentType": "none",
+        "reportGeneralTypeIssues": "none",
+        "reportUntypedFunctionDecorator": "none"
+    },
+    "python.linting.mypyArgs": [
+        "--follow-imports=silent",
+        "--show-column-numbers",
+        "--implicit-reexport",
+        "--config-file=${workspaceFolder}/pyproject.toml",
+        "--verbose",
+        "--strict"
+    ],
+    // Peacock workspace color
+    "workbench.colorCustomizations": {
+        "activityBar.activeBackground": "#1f6fd0",
+        "activityBar.background": "#1f6fd0",
+        "activityBar.foreground": "#e7e7e7",
+        "activityBar.inactiveForeground": "#e7e7e799",
+        "activityBarBadge.background": "#ee90bb",
+        "activityBarBadge.foreground": "#15202b",
+        "commandCenter.border": "#e7e7e799",
+        "sash.hoverBorder": "#1f6fd0",
+        "statusBar.background": "#1857a4",
+        "statusBar.foreground": "#e7e7e7",
+        "statusBarItem.hoverBackground": "#1f6fd0",
+        "statusBarItem.remoteBackground": "#1857a4",
+        "statusBarItem.remoteForeground": "#e7e7e7",
+        "titleBar.activeBackground": "#1857a4",
+        "titleBar.activeForeground": "#e7e7e7",
+        "titleBar.inactiveBackground": "#1857a499",
+        "titleBar.inactiveForeground": "#e7e7e799"
+    },
+    "peacock.remoteColor": "#1857a4",
+    // Highlighting
+    "todohighlight.isEnable": true,
+    "todohighlight.keywords": [
+        {
+            "text": "NOTE:",
+            "color": "#ecf0f1",
+            "border": "1px solid #2980b9",
+            "borderRadius": "4px",
+            "backgroundColor": "#3498db",
+        },
+        {
+            "text": "HACK",
+            "color": "#ecf0f1",
+            "border": "1px solid #8e44ad",
+            "borderRadius": "4px",
+            "backgroundColor": "#9b59b6",
+        },
+        {
+            "text": "FIXME",
+            "color": "#ecf0f1",
+            "border": "1px solid #f39c12",
+            "borderRadius": "4px",
+            "backgroundColor": "#f1c40f",
+        },
+        {
+            "text": "BUG",
+            "color": "#ecf0f1",
+            "border": "1px solid #c0392b",
+            "borderRadius": "4px",
+            "backgroundColor": "#e74c3c",
+        },
+        {
+            "text": "TODO",
+            "color": "#ecf0f1",
+            "border": "1px solid #27ae60",
+            "borderRadius": "4px",
+            "backgroundColor": "#2ecc71",
+        }
+    ]
+}

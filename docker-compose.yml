@@ -1,0 +1,18 @@
+version: "3.4"
+
+services:
+  custom-orm:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    command: bash -c "pipenv run coverage run -m pytest -vv && pipenv run coverage report"
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_PASSWORD: "password"
