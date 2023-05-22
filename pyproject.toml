@@ -9,6 +9,7 @@ packages = []
 [tool.poetry.dependencies]
 python = "^3.11"
 psycopg2-binary = "^2.9.6"
+mysql-connector-python = "^8.0.33"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -18,6 +19,7 @@ black = "^23.3.0"
 pylint = "^2.17.4"
 mypy = "^1.3.0"
 ruff = "^0.0.267"
+types-psycopg2 = "^2.9.21.10"
 
 [tool.black]
 line-length = 120
@@ -29,7 +31,7 @@ line-length = 120
 pythonpath = ["."]
 
 [tool.mypy]
-exclude = ["tests", "alembic"]
+exclude = ["test", "alembic"]
 
 [build-system]
 requires = ["poetry-core"]

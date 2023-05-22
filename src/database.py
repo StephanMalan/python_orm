@@ -1,26 +1,10 @@
 from __future__ import annotations
 
-import time
-from collections import ChainMap
-from dataclasses import dataclass, fields
-from typing import Any, Type, TypeVar
-
-from psycopg2 import DatabaseError, errors
-from psycopg2._psycopg import connection
-from psycopg2.pool import PoolError, ThreadedConnectionPool
-from psycopg2.sql import SQL, Identifier
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Any, Type
 
 import src
-
-CREATE_TABLE_SQL = "CREATE TABLE {} (id SERIAL PRIMARY KEY, {});"
-INSERT_SQL = "INSERT INTO {} ({}) VALUES ({}) RETURNING id;"
-UPDATE_SQL = "UPDATE {} SET {} WHERE id = %s;"
-SELECT_SQL = "SELECT {} FROM {}{} ORDER BY id {};"
-DESCRIBE_TABLE_SQL = (
-    "SELECT column_name, data_type, character_maximum_length "
-    "FROM information_schema.columns WHERE table_name = %s;"
-)
-ALTER_TABLE_SQL = "ALTER TABLE {} {}"
 
 
 @dataclass
@@ -28,143 +12,82 @@ class DatabaseConfig:
     host: str
     user: str
     password: str
-    database: str = "postgress"
+    database: str
     minconn: int = 1
     maxconn: int = 1
 
 
-T = TypeVar("T", bound="src.Model")
-
-
-class Database:
+class Database(ABC):
     def __init__(self, conn_details: DatabaseConfig) -> None:
         self.conn_details = conn_details
-        self.conn_pool = self._create_conn_pool(conn_details)
+        self.conn = self._init_connection(conn_details)
 
-    def _create_conn_pool(self, conn_details: DatabaseConfig) -> ThreadedConnectionPool:
-        return ThreadedConnectionPool(**conn_details.__dict__)
+    @abstractmethod
+    def _init_connection(self, conn_details: DatabaseConfig) -> Any:
+        """Initialize database connection(s)"""
 
-    def _get_connection(self) -> connection:
-        for _ in range(10):
-            try:
-                conn: connection = self.conn_pool.getconn()
-                conn.autocommit = True
-                return conn
-            except PoolError:
-                time.sleep(0.1)
-        raise PoolError()
+    @abstractmethod
+    def _execute_query(self, sql_query: Any, query_vars: tuple[Any, ...] | None = None) -> list[tuple[Any, ...]]:
+        """Execute SQL on the database and return the resulting rows"""
 
-    def _execute(self, query: any, query_vars=None):
-        conn = None
-        try:
-            conn = self._get_connection()
-            cur = conn.cursor()
-            cur.execute(query, query_vars)
-            print(cur.query)
-            return cur.fetchall() if cur.description else []
-        except DatabaseError as ex:
-            self.conn_pool.putconn(conn, close=True)
-            raise ex
-        finally:
-            if conn and not conn.closed:
-                conn.cursor().close()
-                self.conn_pool.putconn(conn)
+    @abstractmethod
+    def _execute_update(
+        self, sql_query: Any, query_vars: tuple[Any, ...] | None = None, insert_id: bool = False
+    ) -> int:
+        """Execute SQL on the database and return either the id of from the last insert or the row count"""
 
-    def create_table(self, model: Type[src.Model]):
-        fields = model.get_field_definitions()
-        sql_fields = [
-            f"{k} {v.sql_type}{v.get_max_length()}" for k, v in fields.items()
-        ]
-        # Create table in database
-        try:
-            sql = SQL(CREATE_TABLE_SQL).format(
-                SQL(model.__name__), SQL(", ".join(sql_fields))
-            )
-            print(str(sql))
-            self._execute(sql)
-        except errors.DuplicateTable:
-            self._modify_table(model)
+    def create_table(self, model: Type[src.BaseModel]) -> None:
+        """Create table from a model. If table exists and is differs from model, the table is altered"""
+        table_schema = self._get_table_schema(model)
+        if not table_schema:
+            create_table_sql = self._get_create_table_sql(model)
+            self._execute_update(create_table_sql)
+            return
 
-    def _modify_table(self, model: Type[src.Model]):
-        results = self._execute(DESCRIBE_TABLE_SQL, (model.__name__.lower(),))
-        lst = [src.FieldFactory.create_field(*field) for field in results]
-        o_fields = dict(ChainMap(*lst))
-        o_fields.pop("id")
-        n_fields = model.get_field_definitions()
-        n_keys, o_keys = set(n_fields.keys()), set(o_fields.keys())
-        actions = []
-        actions.extend([f"DROP COLUMN {name}" for name in o_keys.difference(n_keys)])
-        to_add = dict(
-            ChainMap(*[{key: n_fields[key]} for key in n_keys.difference(o_keys)])
-        )
-        actions.extend(
-            [
-                f"ADD COLUMN {k} {v.sql_type}{v.get_max_length()}"
-                for k, v in to_add.items()
-            ]
-        )
-        to_upd = dict(
-            ChainMap(
-                *[
-                    {k: n_fields[k]}
-                    for k in n_keys.intersection(o_keys)
-                    if n_fields[k] != o_fields[k]
-                ]
-            )
-        )
-        actions.extend(
-            [
-                f"ALTER COLUMN {k} TYPE {v.sql_type}{v.get_max_length()}"
-                for k, v in to_upd.items()
-            ]
-        )
-        self._execute(
-            SQL(ALTER_TABLE_SQL).format(SQL(model.__name__), SQL(", ".join(actions)))
-        )
+        if table_schema == model.get_all_field_defs():
+            return
 
-    def save(self, model: src.Model):
-        table_name = SQL(model.__class__.__name__)
-        field_dict = model.get_field_values()
-        field_values = list(field_dict.values())
+        alter_table_sql = self._get_alter_table_sql(model, table_schema)
+        self._execute_update(alter_table_sql)
+
+    @abstractmethod
+    def _get_table_schema(self, model: Type[src.BaseModel]) -> dict[str, src.Field]:
+        """Returns the table schema"""
+
+    @abstractmethod
+    def _get_create_table_sql(self, model: Type[src.BaseModel]) -> Any:
+        """Returns the SQL required to create a new table in the database"""
+
+    @abstractmethod
+    def _get_alter_table_sql(self, model: Type[src.BaseModel], schema: dict[str, src.Field]) -> Any:
+        """Returns the SQL required to alter an existing table in the database"""
+
+    def save(self, model: src.BaseModel) -> None:
+        """Save model data to database. If the model is new, the value is added; otherwise it's updated"""
         if model.id:
-            assignments = SQL(
-                ", ".join("{} = %s".format(field) for field in field_dict.keys())
-            )
-            field_values.append(model.id)
-            self._execute(SQL(UPDATE_SQL).format(table_name, assignments), field_values)
+            update_sql, query_vars = self._get_update_table_sql(model)
+            self._execute_update(update_sql, query_vars)
         else:
-            field_name_lst = field_dict.keys()
-            field_names = SQL(", ".join(field_name_lst))
-            field_placeholders = SQL(",".join(["%s"] * len(field_name_lst)))
-            ret = self._execute(
-                SQL(INSERT_SQL).format(table_name, field_names, field_placeholders),
-                field_values,
-            )
-            model.id = ret[0][0]
+            insert_sql, query_vars = self._get_insert_table_sql(model)
+            result = self._execute_update(insert_sql, query_vars, insert_id=True)
+            model.id = result
 
-    def query(self, model: Type[T]) -> src.Query[T]:
+    @abstractmethod
+    def _get_update_table_sql(self, model: src.BaseModel) -> tuple[Any, tuple[Any, ...]]:
+        """Returns the SQL required to update an existing model's row in a table in the database"""
+
+    @abstractmethod
+    def _get_insert_table_sql(self, model: src.BaseModel) -> tuple[Any, tuple[Any, ...]]:
+        """Returns the SQL required to insert a model's data into a table in the database"""
+
+    def query(self, model: Type[src.T]) -> src.Query[src.T]:
         query = src.Query(model, self)
         return query
 
-    def fetch_results(
-        self, model: Type[T], criterion: dict[str, Any], limit: int = 0
-    ) -> list[T]:
-        _fields = ["id"] + model.get_field_names()
-        where_clause = SQL("")
-        field_values = []
-        limit_clause = SQL("")
-        if criterion:
-            where_clause = SQL(
-                " WHERE "
-                + " AND ".join(["{} = %s".format(f) for f in criterion.keys()])
-            )
-            field_values = [value for value in criterion.values()]
-        if limit > 0:
-            limit_clause = SQL(f"LIMIT {limit}")
-        sel_fields = SQL(", ".join(_fields))
-        tbl_name = SQL(model.__name__.lower())
-        ret = self._execute(
-            SQL(SELECT_SQL).format(sel_fields, tbl_name, where_clause, limit_clause),
-            field_values,
-        )
-        return [model(**dict(zip(_fields, row))) for row in ret]
+    @abstractmethod
+    def fetch_results(self, model: Type[src.T], criterion: dict[str, Any], limit: int = 0) -> list[src.T]:
+        """Retrieve data from database. Can be filtered and limited"""
+
+    @abstractmethod
+    def _drop_tables(self, **kwargs: Any) -> None:
+        """Test fuction that is used to clean up database"""

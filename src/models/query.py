@@ -1,10 +1,9 @@
-from functools import reduce
-from typing import Any, Generic, Iterator, Type, TypeVar
+from __future__ import annotations
 
-from src.database import Database
-from src.models.models import Model
+from typing import Any, Generic, Iterator, Type
 
-T = TypeVar("T", bound=Model)
+from src import Database
+from src.models.model import T
 
 
 class Query(Generic[T]):
@@ -37,13 +36,10 @@ class Query(Generic[T]):
         return self._result_cache[k]
 
     def filter(self, **criteria: Any) -> "Query[T]":
-        # noinspection PyProtectedMember
         self.model.validate_field_types(criteria)
         if self._result_cache:
             self._result_cache = [
-                v
-                for v in self._result_cache
-                if all(getattr(v, k) == v for k, v in criteria.items())
+                result for result in self._result_cache if all(getattr(result, k) == v for k, v in criteria.items())
             ]
         else:
             self._criteria.update(criteria)
@@ -51,9 +47,7 @@ class Query(Generic[T]):
 
     def first(self) -> T:
         if not self._result_cache:
-            self._result_cache = self.db.fetch_results(
-                self.model, self._criteria, limit=1
-            )
+            self._result_cache = self.db.fetch_results(self.model, self._criteria, limit=1)
         return self._result_cache[0]
 
     def all(self) -> list[T]:

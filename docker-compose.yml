@@ -1,18 +1,55 @@
 version: "3.4"
 
 services:
-  custom-orm:
+  orm_test:
     build:
       context: .
       dockerfile: Dockerfile
-      target: dev
-    command: bash -c "pipenv run coverage run -m pytest -vv && pipenv run coverage report"
+    command: bash -c " sleep 5 && coverage run --source=src -m pytest -vv && coverage report --show-missing --skip-empty"
+    env_file:
+      - .env
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
 
   postgres:
     image: postgres
     ports:
       - "5432:5432"
-    environment:
-      POSTGRES_PASSWORD: "password"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"
+        ]
+      interval: 1s
+      timeout: 1s
+      retries: 5
+    env_file:
+      - .env
+
+  mysql:
+    image: mysql
+    command: --default-authentication-plugin=mysql_native_password
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "-u$MYSQL_USER",
+          "-p$MYSQL_PASSWORD",
+          "ping",
+          "-h",
+          "localhost"
+        ]
+      interval: 1s
+      timeout: 20s
+      retries: 10
+    env_file:
+      - .env

@@ -1,15 +1,20 @@
-FROM --platform=linux/amd64 python:3.9-slim as base
+FROM python:3.11.2-slim-bullseye as python-build-stage
 
-COPY ./vegaorm /app/vegaorm
-COPY ./Pipfile /app
-COPY ./Pipfile.lock /app
+ARG BUILD_ENVIRONMENT=production
+ARG APP_HOME=/app
 
-WORKDIR /app
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    build-essential \
+    default-libmysqlclient-dev \
+    libcurl4-openssl-dev libssl-dev \
+    openssh-client
+RUN pip install poetry
 
-FROM base as dev
+WORKDIR ${APP_HOME}
 
-COPY ./test /app/test
+COPY pyproject.toml ${APP_HOME}
+RUN poetry config virtualenvs.create false
+RUN poetry install --no-root $(test "$BUILD_ENVIRONMENT" == production && echo "--no-dev")
 
-RUN pip install pipenv
-RUN pipenv uninstall psycopg2
-RUN pipenv install --dev
+COPY . ${APP_HOME}
+WORKDIR ${APP_HOME}

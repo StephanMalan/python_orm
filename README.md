@@ -1,13 +1,10 @@
-# VegaX Custom-ORM Assignment
-
-###### By Stephan Malan
+# Python ORM
 
 In this project, I use Python to create my own simple implementation of an ORM.
 
 It currently has the following features:
 
-- Connect to Postgres instance
-- Create database
+- Supports Postgres, MySQL, SQLite
 - Create table based on class definition
 - Provides three field types to define the table (CharField, IntField, BoolField)
 - Save row to table based on instantiated class values
@@ -19,18 +16,18 @@ It currently has the following features:
 - Supports multi-threading by increasing the maximum amount of connections to create
 - Automatic changes to table schema based on class definition changes
 
-For testing, I use pytest and coverage to run multiple test scenarios and report on the code coverage. Currently, the
-ORM has 100% code coverage.
+For testing, I use pytest and coverage to run multiple test scenarios and report on the code coverage.
 
-The testing is done using two Docker containers, orchestrated by Docker-compose:
+The testing is done using three Docker containers, orchestrated by docker compose:
 
 - A container that runs the postgres database
+- A container that runs the mysql database
 - A container that runs all test cases and displays the results and the code coverage
 
-To run test tests on docker, use the following command:
+To run the tests, use the following command:
 
 ```
-docker-compose up --build --exit-code-from custom-orm
+make run_test
 ```
 
 ---
@@ -38,4 +35,3 @@ docker-compose up --build --exit-code-from custom-orm
 
 This is a simple implementation and lacks a lot of functionality of a standard ORM. Foreign key support has not been
 added yet. All use cases and error validation have not been met.
----
